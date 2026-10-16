@@ -129,6 +129,20 @@ body{
     linear-gradient(180deg, rgba(0,0,0,0) 46%, rgba(0,0,0,.26) 100%);
 }
 
+/* 浅底卡（纸感）：文字与压暗都得翻过来，否则白字压在白底上看不见。
+   参考图里那种「奶油底深字」的卡就是这个路子。 */
+.card.lt{color:#0e0b0b}
+.card.lt::after{
+  background:
+    radial-gradient(118% 92% at 6% -6%, rgba(255,255,255,.6), transparent 56%),
+    linear-gradient(180deg, rgba(120,90,90,0) 46%, rgba(120,90,90,.14) 100%);
+}
+.card.lt .nm{text-shadow:none}
+.card.lt .ds{color:rgba(14,11,11,.66);text-shadow:none}
+.card.lt .tag{color:rgba(14,11,11,.82);text-shadow:none}
+.card.lt .go{color:#fffdfd;background:#0e0b0b;box-shadow:0 6px 16px rgba(14,11,11,.28)}
+.card.lt:focus-visible{outline-color:#0e0b0b}
+
 /* 标题贴顶部 —— 堆叠时露出的窄条正好显示 app 名字 */
 .card .txt{
   position:absolute;left:22px;right:26%;top:20px;z-index:3;
@@ -307,8 +321,8 @@ body{
         <span class="go" aria-hidden="true">↗</span>
       </a>
 
-      <a class="card" href="motion-catalog/" data-nm="动效总表"
-         style="--c1:#B48CFF;--c2:#5623D2;--glow:#8E5BFF">
+      <a class="card lt" href="motion-catalog/" data-nm="动效总表"
+         style="--c1:#FAF4F4;--c2:#DCC9C9;--glow:#E8D2D2">
         <img class="ico" src="icons/motion-catalog.png" alt="" width="256" height="256" decoding="async" loading="lazy">
         <span class="txt">
           <span class="nm">动效总表</span>
