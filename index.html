@@ -381,7 +381,22 @@ body{
   var N = cards.length;
   var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 
+  /* 底部留白的额外余量：让最后一张卡的吸附点一定够得到（见 measure 里的说明） */
+  var SLACK = 24;
+
   var pitch = 0, active = -1, ticking = false, glows = [];
+
+  /* 键盘/圆点翻页时，平滑滚动途中 scrollTop 会停在中途，
+     此时再按一次若按 scrollTop 反推，算出的目标可能跟上次相同 → 这次按键被吞。
+     所以记一个「已命令到哪一张」，在滚动还没走完的这段窗口里以它为准。
+     用户一旦自己上手拖（touchstart/pointerdown/wheel）就立刻作废。 */
+  var navIdx = -1, navUntil = 0;
+  function gotoCard(i){
+    navIdx = i;
+    navUntil = Date.now() + 700;
+    deckEl.scrollTo({ top: i * pitch, behavior: reduce.matches ? 'auto' : 'smooth' });
+  }
+  function dropNav(){ navIdx = -1; navUntil = 0; }
 
   cards.forEach(function(c){
     var g = document.createElement('div');
@@ -398,9 +413,15 @@ body{
     if (cards.length > 2) pitch = cards[2].offsetTop - cards[1].offsetTop;
     else if (cards.length > 1) pitch = cards[1].offsetTop - cards[0].offsetTop;
     if (!(pitch > 0)) pitch = cardH;
-    var pad = Math.max(0, (deckEl.clientHeight - cardH) / 2);
+
+    /* 上下留白要让首尾卡都能停在视口正中。
+       但底部必须**多留一点**：只按居中算是「刚好够」，而 clientHeight 带小数，
+       一旦向下取整，最大滚动量就会比最后一张的吸附点少几个像素 ——
+       吸附点够不到，scroll-snap 会拒绝停在那里、直接弹回上一张，
+       结果最后一张永远选不中。所以底部额外加一段余量。 */
+    var pad = Math.ceil((deckEl.clientHeight - cardH) / 2);
     inner.style.paddingTop = pad + 'px';
-    inner.style.paddingBottom = pad + 'px';
+    inner.style.paddingBottom = (pad + SLACK) + 'px';
   }
 
   function paint(){
@@ -479,9 +500,12 @@ body{
   });
 
   dots.forEach(function(dot, i){
-    dot.addEventListener('click', function(){
-      deckEl.scrollTo({ top: i * pitch, behavior: reduce.matches ? 'auto' : 'smooth' });
-    });
+    dot.addEventListener('click', function(){ gotoCard(i); });
+  });
+
+  /* 用户自己拖/滚/点时，键盘那条命令记录立刻作废 */
+  ['touchstart', 'pointerdown', 'wheel'].forEach(function(ev){
+    deckEl.addEventListener(ev, dropNav, { passive: true });
   });
 
   document.addEventListener('keydown', function(e){
@@ -490,8 +514,13 @@ body{
     if (!dir) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
     e.preventDefault();
-    var next = Math.max(0, Math.min(N - 1, (active < 0 ? 0 : active) + dir));
-    deckEl.scrollTo({ top: next * pitch, behavior: reduce.matches ? 'auto' : 'smooth' });
+    /* 以「已命令到哪一张」为基准（还在平滑滚动里就是它），否则按真实 scrollTop 反推。
+       绝不用 active —— 它只在 rAF 里更新，连着按时会还是旧值、把按键吞掉。 */
+    var base = (navIdx >= 0 && Date.now() < navUntil)
+      ? navIdx
+      : (pitch > 0 ? Math.round(deckEl.scrollTop / pitch) : 0);
+    var next = Math.max(0, Math.min(N - 1, base + dir));
+    gotoCard(next);
   });
 
   /* 先量再画：初始 transform 必须在首帧同步写一次，不能只等 rAF 循环 */
