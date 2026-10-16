@@ -2,209 +2,500 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#f4f2ee">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="format-detection" content="telephone=no">
+<title>我的应用</title>
+<meta name="description" content="我自己做的小应用，都在这里">
+<!-- theme-color / html 底色 / manifest 三处必须同色（iOS 状态栏那条填的就是它） -->
+<meta name="theme-color" content="#07070b">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- 必须是 default：black-translucent 会让视口底比屏幕底高 47px，底栏永远悬空 -->
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="我的应用">
-<meta name="description" content="我自己做的小应用，都在这里">
-<title>我的应用</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icons/favicon.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 
 :root{
-  --bg:#f4f2ee;
-  --card:#ffffff;
-  --ink:#2b2a28;
-  --ink2:#6f6a63;
-  --ink3:#9c968d;
-  --line:#e7e3dc;
-  --shadow:0 1px 2px rgba(43,42,40,.04),0 8px 22px rgba(43,42,40,.07);
+  --card-h: clamp(196px, 30dvh, 280px);
+  /* 卡片节距。0.52 让下面几张卡的名字都能露出来（节距再小标题就被压住了）。 */
+  --pitch: calc(var(--card-h) * .52);
+  --w: min(470px, 100vw - 40px);
+  --radius: 30px;
+  --ink: #fff;
+  --dim: rgba(255,255,255,.44);
+  --glass: rgba(255,255,255,.085);
+  --line: rgba(255,255,255,.14);
 }
 
-html,body{min-height:100%}
-/* 禁掉长按选中文字 / 长按弹出「拷贝·查询」气泡 / 长按元素被拎起来放大。
-   这三样是 Safari 的行为，出现在 App 里就会「一看就是网页」。
-   -webkit-touch-callout 管的正是气泡和"拎起来"，缺它光禁 user-select 不够。
-   输入框必须单独开回来（见下方 input,textarea 那条）。 */
+html,body{height:100%;background:#07070b}
 html,body{
-  -webkit-user-select:none;user-select:none;
-  -webkit-touch-callout:none;
+  touch-action:pan-x pan-y; overscroll-behavior:none;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
 }
-input,textarea,select,[contenteditable]{
-  -webkit-user-select:text;user-select:text;
-  -webkit-touch-callout:default;
-}
+input,textarea,select,[contenteditable]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 body{
-  background:var(--bg);
   color:var(--ink);
   font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
-  padding:0 16px calc(40px + env(safe-area-inset-bottom));
-  /* 背景一点极淡的暖色渐变，避免纯色发死 */
-  background-image:
-    radial-gradient(1100px 480px at 50% -180px, rgba(255,255,255,.85), transparent 70%),
-    radial-gradient(700px 340px at 90% 8%, rgba(232,199,205,.16), transparent 70%);
-  background-repeat:no-repeat;
 }
 
-.wrap{max-width:720px;margin:0 auto}
+/* ================= 舞台 ================= */
+.stage{position:relative;height:100vh;height:100dvh;overflow:hidden;background:#07070b}
 
-/* ---------- 顶部 ---------- */
-header{
-  padding:calc(34px + env(safe-area-inset-top)) 4px 22px;
+/* 背光：每个 app 一层，切卡时交叉淡入。
+   大小贴着卡片走（不要铺满屏幕，否则整页泛灰、饱和度被拉掉）。
+   位置跟着牌堆的中轴走（即屏幕中心偏上 48px，与卡片聚焦线一致）。 */
+.glowWrap{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.glow{
+  position:absolute;left:50%;top:calc(50% - 48px);
+  width:calc(var(--w) * 1.22);height:calc(var(--card-h) * 1.42);
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  opacity:0;transition:opacity .8s ease;
 }
-header .hi{
-  font-size:13px;font-weight:600;color:var(--ink3);
-  letter-spacing:.3px;margin-bottom:9px;
-}
-header h1{
-  font-size:29px;font-weight:800;letter-spacing:.4px;line-height:1.25;
-}
-header .sub{
-  margin-top:11px;font-size:13.5px;color:var(--ink2);line-height:1.7;
-}
-header .sub b{color:var(--ink);font-weight:700}
+.glow.on{opacity:.42}
 
-/* ---------- 分组标题 ---------- */
-.sec{
-  display:flex;align-items:center;gap:10px;
-  padding:0 4px;margin:26px 0 13px;
+/* 顶部与底部各压一层暗角，保证压字可读 */
+.vign{
+  position:absolute;left:0;right:0;pointer-events:none;z-index:4;
+  background:linear-gradient(180deg, rgba(7,7,11,.96) 0%, rgba(7,7,11,.72) 52%, rgba(7,7,11,0) 100%);
+  height:calc(env(safe-area-inset-top) + 96px);top:0;
 }
-.sec h2{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:.3px}
-.sec .n{
-  font-size:11px;font-weight:700;color:var(--ink3);
-  background:#fff;border:1px solid var(--line);border-radius:20px;padding:2px 8px;
-}
-.sec .rule{flex:1;height:1px;background:var(--line)}
 
-/* ---------- 卡片网格 ---------- */
-.grid{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:12px;
+/* 顶部：头像 + 标题 + 计数胶囊 */
+.topbar{
+  position:absolute;left:0;right:0;top:0;z-index:6;
+  display:flex;align-items:center;gap:12px;
+  padding:calc(12px + env(safe-area-inset-top)) 20px 10px;
 }
-@media(max-width:340px){ .grid{grid-template-columns:1fr} }
+.avatar{
+  width:40px;height:40px;border-radius:50%;flex:0 0 auto;
+  overflow:hidden;border:1px solid var(--line);background:#15151d;
+}
+.avatar img{width:100%;height:100%;display:block;object-fit:cover}
+.me{flex:1;min-width:0}
+.me b{display:block;font-size:15px;font-weight:800;letter-spacing:.2px;line-height:1.25}
+.me span{display:block;font-size:11px;color:var(--dim);margin-top:2px}
+.counter{
+  flex:0 0 auto;font-size:12.5px;font-weight:800;letter-spacing:.6px;
+  color:#e9e9f2;
+  background:rgba(255,255,255,.11);border:1px solid var(--line);
+  border-radius:999px;padding:7px 14px;
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+}
 
-a.app{
-  display:block;position:relative;overflow:hidden;
-  background:var(--card);
-  border-radius:20px;
-  padding:15px 15px 14px;
+/* ================= 牌堆 ================= */
+/* 上沿抬高 96px：滚动容器的中心随之上移 48px，当前卡就落在屏幕中心稍偏上，
+   给底部 dock 留出位置（否则整叠看起来压在下半屏）。
+   top 用 -96 而不是 transform，是为了不制造新的层叠上下文、也不影响 snap 计算。 */
+.deck{
+  position:absolute;left:0;right:0;top:-96px;bottom:0;z-index:2;
+  overflow-y:auto;overflow-x:hidden;
+  scroll-snap-type:y mandatory;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-width:none;
+}
+.deck::-webkit-scrollbar{display:none}
+.deckInner{display:flex;flex-direction:column;align-items:center}
+
+.card{
+  position:relative;flex:0 0 auto;display:block;
+  width:var(--w);height:var(--card-h);
+  border-radius:var(--radius);overflow:hidden;
   text-decoration:none;color:inherit;
-  box-shadow:var(--shadow);
-  transition:transform .14s ease,box-shadow .14s ease;
-  min-height:126px;
+  background:linear-gradient(146deg,var(--c1) 0%,var(--c2) 100%);
+  box-shadow:
+    0 22px 46px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.18);
+  scroll-snap-align:center;
+  margin-bottom:calc(var(--pitch) - var(--card-h));
+  transform-origin:center center;
+  will-change:transform,opacity;
 }
-a.app:active{transform:scale(.975);box-shadow:0 1px 2px rgba(43,42,40,.06)}
-/* 每张卡右上角一团该 app 的主题色 */
-a.app .blob{
-  position:absolute;right:-26px;top:-30px;
-  width:92px;height:92px;border-radius:50%;
-  background:var(--c,#e9e6e0);
-  opacity:.5;
+.card:last-child{margin-bottom:0}
+.card:focus{outline:none}
+.card:focus-visible{outline:2px solid #fff;outline-offset:3px}
+
+/* 卡面高光：斜向柔光 + 底部压暗，让纯色不呆 */
+.card::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:2;
+  background:
+    radial-gradient(118% 92% at 6% -6%, rgba(255,255,255,.28), transparent 56%),
+    linear-gradient(180deg, rgba(0,0,0,0) 46%, rgba(0,0,0,.26) 100%);
+}
+
+/* 标题贴顶部 —— 堆叠时露出的窄条正好显示 app 名字 */
+.card .txt{
+  position:absolute;left:22px;right:26%;top:20px;z-index:3;
+}
+.card .nm{
+  display:block;font-size:clamp(23px,7vw,29px);font-weight:800;
+  letter-spacing:-.02em;line-height:1.08;
+  text-shadow:0 2px 16px rgba(0,0,0,.34);
+}
+.card .ds{
+  margin-top:8px;font-size:11.5px;line-height:1.45;
+  color:rgba(255,255,255,.82);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;
+  text-shadow:0 1px 10px rgba(0,0,0,.32);
+}
+
+/* 插画靠右下，下半部分露出在窄条之外 */
+.card .ico{
+  position:absolute;right:-10px;bottom:-12%;z-index:1;
+  height:78%;width:auto;display:block;
+  transform:rotate(-6deg);
+  box-shadow:0 18px 38px rgba(0,0,0,.36);
   pointer-events:none;
 }
-a.app .ico{
-  position:relative;
-  width:44px;height:44px;border-radius:13px;
-  display:grid;place-items:center;font-size:23px;line-height:1;
-  background:var(--c,#e9e6e0);
-  box-shadow:inset 0 0 0 1px rgba(43,42,40,.06);
+
+/* 被上方卡片压住时，只有底部窄条露出来 —— 这里补一条名字，
+   否则叠在下面的卡只剩一块颜色，认不出是哪个 app。 */
+.card .tag{
+  position:absolute;left:22px;bottom:16px;z-index:3;
+  font-size:13px;font-weight:800;letter-spacing:.02em;
+  color:rgba(255,255,255,.9);
+  text-shadow:0 2px 12px rgba(0,0,0,.5);
+  opacity:0;transition:opacity .3s ease;
 }
-a.app .nm{
-  display:block;
-  position:relative;
-  margin-top:12px;font-size:15.5px;font-weight:800;letter-spacing:.2px;line-height:1.3;
+.card.below .tag{opacity:1}
+.card.below .txt{opacity:0}
+
+.card .go{
+  position:absolute;right:18px;top:18px;z-index:4;
+  width:32px;height:32px;border-radius:50%;
+  display:grid;place-items:center;font-size:14px;font-weight:800;
+  color:#14141c;background:rgba(255,255,255,.94);
+  box-shadow:0 6px 16px rgba(0,0,0,.3);
+  opacity:0;transform:scale(.86);
+  transition:opacity .3s ease,transform .3s cubic-bezier(.22,1,.36,1);
 }
-a.app .ds{
-  display:block;
-  position:relative;
-  margin-top:5px;font-size:11.5px;line-height:1.55;color:var(--ink2);
+.card.act .go{opacity:1;transform:scale(1)}
+
+/* ================= 底部 ================= */
+.dock{
+  position:absolute;left:0;right:0;bottom:0;z-index:6;
+  padding:26px 20px calc(12px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg, rgba(7,7,11,0) 0%, rgba(7,7,11,.7) 40%, rgba(7,7,11,.94) 100%);
 }
-a.app .new{
-  position:absolute;right:12px;top:13px;
-  font-size:9.5px;font-weight:800;letter-spacing:.6px;
-  color:#b3543a;background:#fdeee8;
-  border-radius:20px;padding:2.5px 7px;
+.dots{display:flex;align-items:center;justify-content:center;gap:7px;height:8px}
+.dot{
+  width:7px;height:7px;border-radius:999px;background:rgba(255,255,255,.24);
+  transition:width .3s cubic-bezier(.22,1,.36,1), background-color .3s ease;
+}
+.dot.on{width:24px;background:rgba(255,255,255,.92)}
+
+.open{
+  position:relative;display:flex;align-items:center;gap:10px;
+  margin-top:20px;height:58px;padding:0 22px;
+  border-radius:999px;text-decoration:none;color:#fff;
+  background:var(--glass);border:1px solid var(--line);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  transition:transform .16s ease, background-color .16s ease;
+}
+.open:active{transform:scale(.978);background:rgba(255,255,255,.14)}
+.open .chip{
+  width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+  background:var(--glow,#fff);
+  box-shadow:0 0 10px var(--glow,#fff);
+  transition:background-color .5s ease,box-shadow .5s ease;
+}
+.open .lb{flex:1;font-size:15.5px;font-weight:800;letter-spacing:.2px}
+.open .arr{font-size:16px;font-weight:800;color:rgba(255,255,255,.72)}
+
+.hint{
+  margin-top:12px;text-align:center;
+  font-size:10.5px;line-height:1.6;color:rgba(255,255,255,.34);
 }
 
-/* ---------- 底部说明 ---------- */
-footer{
-  margin-top:32px;padding:0 6px;
-  font-size:11.5px;line-height:1.85;color:var(--ink3);
+@media(max-height:660px){
+  .card .ds{-webkit-line-clamp:1}
+  .dock{padding-top:16px}
+  .open{height:52px;margin-top:14px}
 }
-footer b{color:var(--ink2);font-weight:700}
-footer .tip{
-  margin-top:14px;background:#fff;border:1px solid var(--line);
-  border-radius:14px;padding:13px 15px;
+
+/* 系统开了「减少动态效果」：退回普通列表。
+   卡片之间的重叠是靠负边距做的，这里必须一起取消 —— 否则 JS 不写 transform 了，
+   卡片却还互相压着，下面的标题会被上一张盖住。 */
+@media(prefers-reduced-motion: reduce){
+  .deck{scroll-snap-type:none}
+  .card{margin-bottom:14px;box-shadow:0 10px 24px rgba(0,0,0,.4)}
+  .card .tag{display:none}
+  .glow{transition:none}
+  .open{transition:none}
+  .dot{transition:none}
 }
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <header>
-    <div class="hi">https://reotho123-pixel.github.io/</div>
-    <h1>我的应用</h1>
-    <div class="sub">
-      自己做的 <b>4</b> 个小应用，都能加到手机主屏幕、离线使用。
+<div class="stage" id="stage">
+
+  <div class="glowWrap" id="glowWrap" aria-hidden="true"></div>
+  <div class="vign" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="avatar"><img src="icons/launcher-192.png" alt="" width="192" height="192"></div>
+    <div class="me">
+      <b>我的应用</b>
+      <span>上下滑动翻卡片</span>
     </div>
+    <div class="counter" id="counter">1 / 6</div>
   </header>
 
-  <div class="sec">
-    <h2>都能用</h2>
-    <span class="n">4 个</span>
-    <span class="rule"></span>
-  </div>
+  <nav class="deck" id="deck" aria-label="我的应用">
+    <div class="deckInner" id="deckInner">
 
-  <div class="grid">
+      <a class="card" href="chishenme/" data-nm="待会吃什么"
+         style="--c1:#FF7EA6;--c2:#D23469;--glow:#FF5E92">
+        <img class="ico" src="icons/chishenme.png" alt="" width="256" height="256" decoding="async">
+        <span class="txt">
+          <span class="nm">待会吃什么</span>
+          <span class="ds">两个人一起定今晚吃什么</span>
+        </span>
+        <span class="tag" aria-hidden="true">待会吃什么</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-    <!-- 待会吃什么 -->
-    <a class="app" href="chishenme/" style="--c:#f7d7e0">
-      <span class="blob"></span>
-      <span class="new">新</span>
-      <span class="ico">🍽</span>
-      <span class="nm">待会吃什么</span>
-      <span class="ds">两个人一起定今晚吃什么<br>随机选菜 · 双人投票 · 采购清单</span>
-    </a>
+      <a class="card" href="jianchi/" data-nm="坚持"
+         style="--c1:#C2D14F;--c2:#68751F;--glow:#C6D64A">
+        <img class="ico" src="icons/jianchi.png" alt="" width="256" height="256" decoding="async" loading="lazy">
+        <span class="txt">
+          <span class="nm">坚持</span>
+          <span class="ds">打卡 · 连续天数 · 破戒重算</span>
+        </span>
+        <span class="tag" aria-hidden="true">坚持</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-    <!-- 坚持 -->
-    <a class="app" href="jianchi/" style="--c:#d6e8dc">
-      <span class="blob"></span>
-      <span class="new">新</span>
-      <span class="ico">🎯</span>
-      <span class="nm">坚持</span>
-      <span class="ds">英语 · 健身 · 戒撸<br>打卡与连续天数</span>
-    </a>
+      <a class="card" href="digital-shelf/" data-nm="极简"
+         style="--c1:#EFBB63;--c2:#AC6C1E;--glow:#F0A93C">
+        <img class="ico" src="icons/digital-shelf.png" alt="" width="256" height="256" decoding="async" loading="lazy">
+        <span class="txt">
+          <span class="nm">极简</span>
+          <span class="ds">物品与软件归类 · 极简进程</span>
+        </span>
+        <span class="tag" aria-hidden="true">极简</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-    <!-- 电子收纳 -->
-    <a class="app" href="digital-shelf/" style="--c:#f6e3c8">
-      <span class="blob"></span>
-      <span class="new">新</span>
-      <span class="ico">📦</span>
-      <span class="nm">电子收纳</span>
-      <span class="ds">物品与软件归类<br>记录喜欢程度 · 极简进程</span>
-    </a>
+      <a class="card" href="lazy-ledger/" data-nm="记账"
+         style="--c1:#93A2FA;--c2:#3F4AC6;--glow:#6F7CFF">
+        <img class="ico" src="icons/lazy-ledger.png" alt="" width="256" height="256" decoding="async" loading="lazy">
+        <span class="txt">
+          <span class="nm">记账</span>
+          <span class="ds">快捷指令自动记账 · 统计</span>
+        </span>
+        <span class="tag" aria-hidden="true">记账</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-    <!-- 懒人记账 -->
-    <a class="app" href="lazy-ledger/" style="--c:#dcdef7">
-      <span class="blob"></span>
-      <span class="ico">💰</span>
-      <span class="nm">懒人记账</span>
-      <span class="ds">快捷指令自动记账<br>手动记账 · 统计</span>
-    </a>
+      <a class="card" href="lazy-ledger/xiongji/" data-nm="熊记"
+         style="--c1:#86DDEC;--c2:#1E8AA8;--glow:#4FC9E0">
+        <img class="ico" src="icons/xiongji.png" alt="" width="256" height="256" decoding="async" loading="lazy">
+        <span class="txt">
+          <span class="nm">熊记</span>
+          <span class="ds">手账风记账 · 自动记账</span>
+        </span>
+        <span class="tag" aria-hidden="true">熊记</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-  </div>
+      <a class="card" href="motion-catalog/" data-nm="动效总表"
+         style="--c1:#B48CFF;--c2:#5623D2;--glow:#8E5BFF">
+        <img class="ico" src="icons/motion-catalog.png" alt="" width="256" height="256" decoding="async" loading="lazy">
+        <span class="txt">
+          <span class="nm">动效总表</span>
+          <span class="ds">交互动效图鉴 · 全部可上手试</span>
+        </span>
+        <span class="tag" aria-hidden="true">动效总表</span>
+        <span class="go" aria-hidden="true">↗</span>
+      </a>
 
-  <footer>
-    <div class="tip">
-      <b>怎么加到主屏幕</b><br>
-      iPhone 用 Safari 打开上面任意一个应用 → 点底部分享按钮 → 「添加到主屏幕」。
-      加完之后它是全屏的，断网也能打开。
     </div>
+  </nav>
+
+  <footer class="dock">
+    <div class="dots" id="dots" aria-hidden="true">
+      <span class="dot on"></span><span class="dot"></span><span class="dot"></span>
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+    <a class="open" id="open" href="chishenme/">
+      <span class="chip" aria-hidden="true"></span>
+      <span class="lb" id="openLb">打开 待会吃什么</span>
+      <span class="arr" aria-hidden="true">→</span>
+    </a>
+    <p class="hint">点卡片直接打开 · 加到主屏幕可离线用</p>
   </footer>
 
 </div>
+
+<script>
+/* 禁掉双指捏合缩放。viewport 的 user-scalable=no 在 iOS 上基本被忽略，
+   真正管用的是下面两层：gesture* 是 iOS Safari 专有事件，touchmove 多指兜底。
+   注意：绝不能在 touchend 里 preventDefault —— 那会把后续 click 一起吃掉。 */
+(function lockZoom(){
+  ['gesturestart','gesturechange','gestureend'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ e.preventDefault(); }, { passive:false });
+  });
+  document.addEventListener('touchmove', function(e){
+    if (e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive:false });
+})();
+
+/* 卡片堆叠 + 中心聚焦。
+   缩放/透明度都是「真实 scrollTop 的纯函数」——没有任何进度状态变量，
+   所以反向滚动天然完全可逆。卡片 i 中心到视口中心的距离恰好是 |i*pitch - scrollTop|，
+   不必读 getBoundingClientRect，也就没有布局抖动。 */
+(function deck(){
+  'use strict';
+  var stage   = document.getElementById('stage');
+  var deckEl  = document.getElementById('deck');
+  var inner   = document.getElementById('deckInner');
+  var glowWrap= document.getElementById('glowWrap');
+  var counter = document.getElementById('counter');
+  var openBtn = document.getElementById('open');
+  var openLb  = document.getElementById('openLb');
+  var dots    = [].slice.call(document.querySelectorAll('#dots .dot'));
+  var cards   = [].slice.call(inner.querySelectorAll('.card'));
+  var N = cards.length;
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  var pitch = 0, active = -1, ticking = false, glows = [];
+
+  cards.forEach(function(c){
+    var g = document.createElement('div');
+    g.className = 'glow';
+    var col = c.style.getPropertyValue('--glow') || '#fff';
+    g.style.background = 'radial-gradient(closest-side, ' + col + ' 0%, rgba(0,0,0,0) 100%)';
+    glowWrap.appendChild(g);
+    glows.push(g);
+  });
+
+  function measure(){
+    if (!N) return;
+    var cardH = cards[0].offsetHeight;
+    if (cards.length > 2) pitch = cards[2].offsetTop - cards[1].offsetTop;
+    else if (cards.length > 1) pitch = cards[1].offsetTop - cards[0].offsetTop;
+    if (!(pitch > 0)) pitch = cardH;
+    var pad = Math.max(0, (deckEl.clientHeight - cardH) / 2);
+    inner.style.paddingTop = pad + 'px';
+    inner.style.paddingBottom = pad + 'px';
+  }
+
+  function paint(){
+    counter.textContent = (active + 1) + ' / ' + N;
+    for (var i = 0; i < dots.length; i++) dots[i].classList.toggle('on', i === active);
+    for (var j = 0; j < glows.length; j++) glows[j].classList.toggle('on', j === active);
+    for (var m = 0; m < N; m++){
+      cards[m].classList.toggle('act', m === active);
+      /* 当前卡下方的卡只露出底部一条（标题被压住了），换成底部名字标签；
+         上方的卡露出的是顶部，标题正好可见，不用换。 */
+      cards[m].classList.toggle('below', !reduce.matches && m > active);
+    }
+    var c = cards[active];
+    if (!c) return;
+    openBtn.setAttribute('href', c.getAttribute('href'));
+    openLb.textContent = '打开 ' + (c.dataset.nm || '');
+    stage.style.setProperty('--glow', c.style.getPropertyValue('--glow') || '#fff');
+  }
+
+  function apply(){
+    ticking = false;
+    var s = deckEl.scrollTop;
+    var band = Math.max(1, deckEl.clientHeight * 0.16);   /* 聚焦带半宽 */
+    var next = active;
+    for (var i = 0; i < N; i++){
+      var d = Math.abs(i * pitch - s);
+      var c = cards[i];
+      if (reduce.matches){
+        c.style.transform = '';
+        c.style.opacity = '';
+        c.style.zIndex = '';
+      } else {
+        var t = Math.min(1, d / band);
+        /* 缩放/透明度衰减都留得比较轻：参考图里上下邻卡是鲜明可辨的，
+           压得太狠会变成一片黑，也认不出下一个是什么 app。 */
+        var sc = 1 - 0.10 * Math.pow(t, 1.35);
+        var op = 1 - 0.22 * Math.pow(t, 1.2);
+        c.style.transform = 'scale(' + sc.toFixed(4) + ')';
+        c.style.opacity = op.toFixed(3);
+        c.style.zIndex = String(1000 - Math.round(d));
+      }
+      if (d < pitch * 0.5 && d < Math.abs(next * pitch - s)) next = i;
+    }
+    if (next !== active){ active = next; paint(); }
+  }
+
+  function onScroll(){
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(apply);
+    /* rAF 在后台标签页/被遮挡的窗口里不触发，只靠它会让 ticking 永远卡在 true，
+       之后再滚动就整个不响应了。定时器兜底保证一定会重算一次。 */
+    setTimeout(function(){ if (ticking) apply(); }, 120);
+  }
+
+  deckEl.addEventListener('scroll', onScroll, { passive: true });
+
+  window.addEventListener('resize', function(){
+    /* 用「当前实际滚动位置」反推最近的卡，而不是可能过期的 active。
+       用 active 的话，用户正在滑动时来个 resize（iOS 地址栏收放就会触发）
+       会被硬拉回上一张卡。 */
+    var idx = pitch > 0 ? Math.round(deckEl.scrollTop / pitch) : 0;
+    idx = Math.max(0, Math.min(N - 1, idx));
+    measure();
+    deckEl.scrollTop = idx * pitch;
+    requestAnimationFrame(apply);
+    setTimeout(function(){ if (ticking) apply(); }, 120);
+  });
+  window.addEventListener('orientationchange', function(){
+    setTimeout(function(){
+      measure();
+      var idx = pitch > 0 ? Math.round(deckEl.scrollTop / pitch) : 0;
+      deckEl.scrollTop = Math.max(0, Math.min(N - 1, idx)) * pitch;
+      apply();
+    }, 240);
+  });
+
+  dots.forEach(function(dot, i){
+    dot.addEventListener('click', function(){
+      deckEl.scrollTo({ top: i * pitch, behavior: reduce.matches ? 'auto' : 'smooth' });
+    });
+  });
+
+  document.addEventListener('keydown', function(e){
+    var map = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1, PageDown: 1, PageUp: -1 };
+    var dir = map[e.key];
+    if (!dir) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    e.preventDefault();
+    var next = Math.max(0, Math.min(N - 1, (active < 0 ? 0 : active) + dir));
+    deckEl.scrollTo({ top: next * pitch, behavior: reduce.matches ? 'auto' : 'smooth' });
+  });
+
+  /* 先量再画：初始 transform 必须在首帧同步写一次，不能只等 rAF 循环 */
+  measure();
+  active = 0;
+  paint();
+  apply();
+  requestAnimationFrame(apply);
+  if (document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ measure(); apply(); }); }
+  window.addEventListener('load', function(){ measure(); apply(); });
+})();
+
+/* 注册离线缓存。放在最后，失败也不影响页面。 */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
+}
+</script>
 </body>
 </html>
